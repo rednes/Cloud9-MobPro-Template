@@ -19,3 +19,11 @@ $ aws cloudformation create-stack --template-body file://./template.yml --stack-
 $ aws cloudformation wait stack-create-complete --stack-name Cloud9-MobPro-Template
 $ SHARECOMMAND=$(echo $(aws cloudformation describe-stacks --stack-name Cloud9-MobPro-Template --query "Stacks[0].Outputs[0].OutputValue")|tr -d '"') && eval $SHARECOMMAND
 ```
+
+DELETE
+
+```
+$ export AWS_DEFAULT_PROFILE=YOUR_PROFILE
+$ export AWS_DEFAULT_REGION=us-west-2
+$ aws cloudformation delete-stack --stack-name Cloud9-MobPro-Template
+```
