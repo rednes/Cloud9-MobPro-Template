@@ -1,0 +1,218 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Cloud9 by CloudFormation'
+
+Parameters:
+  AZ:
+    Type: String
+    Description: Availability Zone
+    MinLength: 1
+    Default: 'a'
+  CIDRPREFIX:
+    Type: String
+    Description: Cidr Block prefix
+    MinLength: 1
+    Default: '10.99'
+  PASSWORD:
+    Type: String
+    Description: Default PASSWORD
+    MinLength: 1
+    Default: 'Cloud987654321!'
+  ENVPOLICY:
+    Type: String
+    Description: Default environment policy arn
+    Default: 'arn:aws:iam::aws:policy/PowerUserAccess'
+  USERPOLICY:
+    Type: String
+    Description: Default user policy arn
+    Default: 'arn:aws:iam::aws:policy/AWSCloud9EnvironmentMember'
+
+Resources:
+  # ネットワーク関連
+  Cloud9VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Sub '${CIDRPREFIX}.0.0/16'
+      Tags:
+      - Key: 'Name'
+        Value: 'Cloud9-VPC'
+  Cloud9IGW:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+      - Key: 'Name'
+        Value: 'Cloud9-IGW'
+  AttachInternetGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    DependsOn:
+    - Cloud9VPC
+    - Cloud9IGW
+    Properties:
+      VpcId: !Ref Cloud9VPC
+      InternetGatewayId: !Ref Cloud9IGW
+  Cloud9RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref Cloud9VPC
+      Tags:
+      - Key: 'Name'
+        Value: 'Cloud9-RouteTable'
+  Cloud9Route:
+    Type: 'AWS::EC2::Route'
+    DependsOn:
+    - Cloud9IGW
+    - AttachInternetGateway
+    Properties:
+      RouteTableId: !Ref Cloud9RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref Cloud9IGW
+  Cloud9Subnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}${AZ}'
+      CidrBlock: !Sub '${CIDRPREFIX}.0.0/24'
+      Tags:
+      - Key: 'Name'
+        Value: 'Cloud9-subnet'
+      VpcId: !Ref Cloud9VPC
+  SubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Cloud9Subnet
+      RouteTableId: !Ref Cloud9RouteTable
+
+  # Cloud9
+  Cloud9EC2:
+    Type: 'AWS::Cloud9::EnvironmentEC2'
+    Properties:
+      Description: 'Cloud9 for MobProgramming.'
+      AutomaticStopTimeMinutes: 30
+      InstanceType: 't2.micro'
+      Name: 'Cloud9-MobPro'
+      SubnetId: !Ref Cloud9Subnet
+
+  # Cloud9環境用IAMロール
+  Cloud9EnvRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'Cloud9-environment'
+      AssumeRolePolicyDocument:
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Effect": "Allow",
+              "Sid": ""
+            }
+          ]
+        }
+      ManagedPolicyArns:
+      - !Sub '${ENVPOLICY}'
+  Cloud9EnvInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    DependsOn:
+    - Cloud9EnvRole
+    Properties:
+      Roles:
+      - !Ref Cloud9EnvRole
+      InstanceProfileName: !Ref Cloud9EnvRole
+
+  # Cloud9操作用IAMユーザ関連
+  Cloud9UserGroup:
+    Type: 'AWS::IAM::Group'
+    Properties:
+      GroupName: 'Cloud9-user-group'
+      ManagedPolicyArns:
+      - !Sub '${USERPOLICY}'
+
+  # 操作ユーザ７人分
+  Cloud9UserAlexa:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Groups:
+        - !Ref Cloud9UserGroup
+      LoginProfile:
+        Password: !Sub '${PASSWORD}'
+        PasswordResetRequired: false
+      UserName: 'alexa'
+  Cloud9UserBatch:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Groups:
+        - !Ref Cloud9UserGroup
+      LoginProfile:
+        Password: !Sub '${PASSWORD}'
+        PasswordResetRequired: false
+      UserName: 'batch'
+  Cloud9UserCognito:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Groups:
+        - !Ref Cloud9UserGroup
+      LoginProfile:
+        Password: !Sub '${PASSWORD}'
+        PasswordResetRequired: false
+      UserName: 'cognito'
+  Cloud9UserDynamo:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Groups:
+        - !Ref Cloud9UserGroup
+      LoginProfile:
+        Password: !Sub '${PASSWORD}'
+        PasswordResetRequired: false
+      UserName: 'dynamo'
+  Cloud9UserElatic:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Groups:
+        - !Ref Cloud9UserGroup
+      LoginProfile:
+        Password: !Sub '${PASSWORD}'
+        PasswordResetRequired: false
+      UserName: 'elastic'
+  Cloud9UserFargate:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Groups:
+        - !Ref Cloud9UserGroup
+      LoginProfile:
+        Password: !Sub '${PASSWORD}'
+        PasswordResetRequired: false
+      UserName: 'fargate'
+  Cloud9UserGlacier:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Groups:
+        - !Ref Cloud9UserGroup
+      LoginProfile:
+        Password: !Sub '${PASSWORD}'
+        PasswordResetRequired: false
+      UserName: 'glacier'
+
+Outputs:
+  ShareCommand:
+    Description: 'AWS-CLI command'
+    Value: !Sub
+    - |+
+      aws cloud9 create-environment-membership --environment-id ${EnvironmentId} --user-arn ${UserAlexaArn} --permissions read-write --region ${AWS::Region} &&
+      aws cloud9 create-environment-membership --environment-id ${EnvironmentId} --user-arn ${UserBatchArn} --permissions read-write --region ${AWS::Region} &&
+      aws cloud9 create-environment-membership --environment-id ${EnvironmentId} --user-arn ${UserCognitoArn} --permissions read-write --region ${AWS::Region} &&
+      aws cloud9 create-environment-membership --environment-id ${EnvironmentId} --user-arn ${UserDynamoArn} --permissions read-write --region ${AWS::Region} &&
+      aws cloud9 create-environment-membership --environment-id ${EnvironmentId} --user-arn ${UserElasticArn} --permissions read-write --region ${AWS::Region} &&
+      aws cloud9 create-environment-membership --environment-id ${EnvironmentId} --user-arn ${UserFargateArn} --permissions read-write --region ${AWS::Region} &&
+      aws cloud9 create-environment-membership --environment-id ${EnvironmentId} --user-arn ${UserGlacierArn} --permissions read-write --region ${AWS::Region}
+    - {
+        EnvironmentId: !Ref Cloud9EC2,
+        UserAlexaArn: !GetAtt Cloud9UserAlexa.Arn,
+        UserBatchArn: !GetAtt Cloud9UserBatch.Arn,
+        UserCognitoArn: !GetAtt Cloud9UserCognito.Arn,
+        UserDynamoArn: !GetAtt Cloud9UserDynamo.Arn,
+        UserElasticArn: !GetAtt Cloud9UserElatic.Arn,
+        UserFargateArn: !GetAtt Cloud9UserFargate.Arn,
+        UserGlacierArn: !GetAtt Cloud9UserGlacier.Arn
+      }
